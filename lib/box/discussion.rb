@@ -1,7 +1,7 @@
 require 'box/item'
 
 module Box
-  class Discussion
+  class Discussion < Item
     def update(params)
       response = @api.update_discussion(id, params)
       Box::Discussion.new(@api, response.parsed_response)

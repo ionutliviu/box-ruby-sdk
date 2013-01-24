@@ -1,7 +1,7 @@
 require 'box/item'
 
 module Box
-  class Comment
+  class Comment < Item
     def update(params)
       response = @api.update_comment(id, params)
       Box::Comment.new(@api, response.parsed_response)

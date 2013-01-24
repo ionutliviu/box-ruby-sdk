@@ -16,10 +16,9 @@ module Box
     # @return [String] The base url of the box api.
     attr_accessor :base_url
 
-    # @return [String] The old url of the box api.
-    attr_accessor :old_url
+    attr_accessor :access_token
 
-    #debug_output
+    #debug_output $stderr
 
     # Create a new API object using the given parameters.
     #
@@ -27,21 +26,17 @@ module Box
     #       this class will no longer work. However, the option to change
     #       the defaults still remains.
     #
-    # @param [String, Api] api_key The api key for your application. You can
-    #        request one on the Box developer website at
-    #        {http://www.box.net/developers/services}. If an {Api} instance
-    #        is passed instead, its key is used.
+    # @param [String, Api] access_token The access token for your user. 
     #
     # @param [String] url the url of the Box api.
     #
-    def initialize(key, url = 'https://api.box.com')
-      @api_key = key
+    def initialize(access_token, url = 'https://api.box.com')
+      @access_token = access_token
 
-      @default_params = { :api_key => key } # add the api_key
-      @default_headers = { 'Authorization' => "BoxAuth api_key=#{ key }" }
+      @default_params = {} 
+      @default_headers = { 'Authorization' => "Bearer #{access_token}" }
 
       @base_url = "#{ url }/2.0" # set the base of the request url
-      @old_url = "#{ url }/1.0" # logins still use v1
     end
 
     # Make a normal REST request.
@@ -70,71 +65,51 @@ module Box
       params[:body] = body if body
 
       response = self.class.send(method.to_sym, url, params)
-      raise response.inspect unless response.success?
-
+      unless response.success?
+        case response
+        when Net::HTTPUnauthorized
+          raise Box::Net::NotAuthorized.new( response )
+        when Net::HTTPForbidden
+          raise Box::Net::Restricted.new( response )
+        when Net::HTTPConflict
+          raise Box::Net::NameTaken.new( response )
+          
+        when Net::HTTPUnknownResponse
+          case response.code
+          when 429 # rate limited
+            raise Box::Net::RateLimited.new( response )
+          when 507 # insufficient_storeage
+            raise Box::Net::AccountExceeded.new( response )
+          else
+            raise Box::Net::UnknownResponse.new( response )
+          end
+        when Net::HTTPServerError
+          raise Box::Net::Unknown.new( response )
+        when Net::HTTPClientError
+          raise Box::Net::InvalidInput.new( response )
+        end
+      end
       response
     end
 
-    def query_old(*args)
-      params = @default_params
-      params = params.merge(args.pop) if args.last.is_a?(Hash)
-
-      url = [ @old_url, 'rest', *args ].join("/")
-
-      result = self.class.get(url, :query => params)
-      result['response']
-    end
-
-    # Request a ticket for authorization
-    def get_ticket
-      query_old(:action => :get_ticket)
-    end
-
-    # Request an auth token given a ticket.
+    # Add the access token to every request.
     #
-    # @param [String] ticket the ticket to use.
-    def get_auth_token(ticket)
-      query_old(:action => :get_auth_token, :ticket => ticket)
-    end
+    # @param [String] access_token The auth token to add to every request.
+    def set_access_token(access_token)
+      @access_token = access_token
 
-    # Add the auth token to every request.
-    #
-    # @param [String] auth_token The auth token to add to every request.
-    def set_auth_token(auth_token)
-      @auth_token = auth_token
-
-      if auth_token
-        @default_params[:auth_token] = auth_token
-        @default_headers['Authorization'] = "BoxAuth api_key=#{ @api_key }&auth_token=#{ auth_token }"
+      if access_token
+        @default_params[:access_token] = access_token
+        @default_headers['Authorization'] = "Bearer #{access_token}"
       else
-        @default_params.delete(:auth_token)
-        @default_headers['Authorization'] = "BoxAuth api_key=#{ @api_key }"
+        @default_params.delete(:access_token)
+        @default_headers.delete('Authorization')
       end
-    end
-
-    # Request the user be logged out.
-    def logout
-      query_old(:action => :logout)
-    end
-
-    # Register a new user.
-    #
-    # @param [String] email The email address to use.
-    # @param [String] password The password to use.
-    def register_new_user(email, password)
-      query_old(:action => :register_new_user, :login => email, :password => password)
-    end
-
-    # Verify a registration email.
-    #
-    # @param [String] email The email address to check.
-    def verify_registration_email(email)
-      query_old(:action => :verify_registration_email, :login => email)
     end
 
     # Get the user's account info.
     def get_account_info
-      query_old(:action => :get_account_info)
+      query(:get, :users, :me )
     end
 
     # VALID
@@ -159,7 +134,7 @@ module Box
 
     # VALID
     def upload_version(file_id, file, old_etag, new_name = nil)
-      query(:post, :files, file_id, :content, :query => { :file => file, :name => new_name }, :headers => { 'If-Match' => old_etag || "" })
+      query(:post, :files, file_id, :content, :query => { :name => file }, :headers => { 'If-Match' => old_etag || "" })
     end
 
     # VALID
@@ -231,6 +206,16 @@ module Box
     # VALID
     def share_folder(folder_id, params = Hash.new)
       query(:put, :folders, folder_id, :shared_link => params)
+    end
+
+    # VALID
+    def get_folder_items(folder_id, params = {} )
+      query(:get, :folders, folder_id, :items, params )
+    end
+
+    # VALID
+    def get_file_comments( file_id )
+      query(:get, :files, file_id, :comments )
     end
 
 =begin

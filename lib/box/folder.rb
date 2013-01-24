@@ -10,6 +10,16 @@ module Box
       super || @data[:folder_id]
     end
 
+    def item_collection( limit = 100, offset = 0 )
+      response = @api.get_folder_items( id, :limit => limit, :offset => offset )
+      # As of 1/15/2012 the API docs say that the response is returned
+      # with :item_collection => { :total_count, :limit, :offset,
+      # :entries }, but the actual response is missing the outer {
+      # :item_colleciton } hash.
+      update_info( :item_collection => response.parsed_response )
+      self.items
+    end
+
     # Create a new folder using this folder as the parent.
     #
     # @param [String] name The name of the new folder.
@@ -121,10 +131,10 @@ module Box
           current
         when ".."
           # use the parent folder
-          parent
+          current.parent
         else
           # must be a file/folder name, so make sure this is a folder
-          return nil unless current and current.type == 'folder'
+          return nil unless current && current.item_type == 'folder'
 
           # search for an item with that name
           current.find(:name => target_name, :recursive => false).first
@@ -133,7 +143,7 @@ module Box
 
       if current
         # ends with a slash, so it has to be a folder
-        if target_path.end_with?('/') and current.type != 'folder'
+        if target_path.end_with?('/') && current.item_type != 'folder'
           # get the folder with the same name (if it exists)
           current = parent.find(:type => 'folder', :name => name, :recursive => false).first
         end
@@ -143,11 +153,25 @@ module Box
     end
 
     def files
-      items.select { |item| item and item.class == Box::File }
+      items.select { |item| item && item.class == Box::File }
     end
 
     def folders
-      items.select { |item| item and item.class == Box::Folder }
+      items.select { |item| item && item.class == Box::Folder }
+    end
+
+    # params may contain
+    #  :access => [ open | company | collaborators ]
+    #  :unshared_at => stop sharing the link on a particular day (rounded to day boundaries)
+    #  :permissions => { :can_download => [ Open | Company ], :can_preview => [ Open | Company ] }
+    def share( params = {} )
+      response = @api.share_folder( id, params )
+      update_info( response.parsed_response )
+    end
+
+    def unshare
+      response = @api.share_folder( id, nil )
+      update_info( response.parsed_response )
     end
 
     protected
@@ -162,7 +186,12 @@ module Box
     def find!(criteria, recursive)
       matches = items.collect do |item| # search over our files and folders
         match = criteria.all? do |key, value| # make sure all criteria pass
-          value === item.send(key) rescue false
+          case key.to_sym
+          when :type
+            value === item.item_type rescue false
+          else
+            value === item.send(key) rescue false
+          end
         end
 
         item if match # use the item if it is a match

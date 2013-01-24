@@ -42,7 +42,8 @@ describe Box::File do
       dummy.name.should == 'dummy.test'
       file = dummy.upload_version(vegetables_file)
 
-      file.name.should == 'veg.test'
+      file.name.should == 'dummy.test'
+      file.download.should == 'banana, orange, avachokado'
       file.parent.should == test_root
       file.etag.should_not == dummy.etag
     end
@@ -115,9 +116,10 @@ describe Box::File do
     end
 
     it "lazy-loads file info" do
-      dummy.data[:etag].should == nil
-      dummy.etag.should_not == nil
-      dummy.data[:etag].should_not == nil
+      file = Box::File.new( get_api, :file_id => dummy.id )
+      file.data[:etag].should == nil
+      file.etag.should_not == nil
+      file.data[:etag].should_not == nil
     end
   end
 end

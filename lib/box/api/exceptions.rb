@@ -32,6 +32,8 @@ module Box
     # Sharing specific responses
     class NotShared < Exception; end
 
+    class RateLimited < Exception; end
+
     # Given a status, returning a cooresponding Exception class.
     #
     # @param [String] status The failing status to look for.
@@ -65,7 +67,7 @@ module Box
         InvalidName
       when "e_input_params"
         InvalidInput
-      when "e_filename_in_use", "s_folder_exists"
+      when "item_name_in_use", "e_filename_in_use", "s_folder_exists"
         NameTaken
       when "e_move_node", "e_copy_node", "e_rename_node", "e_set_description"
         Generic

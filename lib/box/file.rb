@@ -29,8 +29,14 @@ module Box
     # @return [File] self
     def upload_version(file)
       file = ::File.new(file) unless file.is_a?(::UploadIO) or file.is_a?(::File)
+      new_name = case file
+      when ::UploadIO
+        file.original_filename
+      when File
+        file.basename
+      end
 
-      response = @api.upload_version(id, file, etag)
+      response = @api.upload_version(id, file, etag, new_name )
       Box::File.new(@api, response.parsed_response['entries'].first)
     end
 
@@ -52,7 +58,7 @@ module Box
     # @return [Array] An array of {Comment}s.
     def comments
       response = @api.get_file_comments(id)
-      response['comments'].collect do |comment|
+      response.parsed_response['entries'].collect do |comment|
         Box::Comment.new(@api, comment)
       end
     end
@@ -89,6 +95,16 @@ module Box
       ::File.open(path, 'wb') do |file|
         file << data.body
       end
+    end
+
+    def share( params = {} )
+      response = @api.share_file( id, params )
+      update_info( response.parsed_response )
+    end
+
+    def unshare( params = {} )
+      response = @api.share_file( id, nil )
+      update_info( response.parsed_response )
     end
 
     protected

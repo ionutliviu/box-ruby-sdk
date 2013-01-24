@@ -43,6 +43,12 @@ module Box
       self
     end
 
+    def item_type(refresh = false)
+      return @data[:type] if @data.key?(:type)
+      self.info(refresh)
+      return @data[:type] if @data.key?(:type)
+    end
+
     # Provides an easy way to access this item's info.
     #
     # @example

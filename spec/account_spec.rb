@@ -6,19 +6,19 @@ require 'box/account'
 describe Box::Account do
   describe "without authorization" do
     before(:each) do
-      @account = get_account(false)
+      @account = get_account( 'invalid' )
     end
 
     it "fails to authorize without auth token" do
-      @account.authorize.should == false
+      @account.authorized?.should == false
     end
 
     it "authorizes using auth token" do
-      @account.authorize(:auth_token => ACCOUNT['auth_token']).should == true
+      @account.authorize(:auth_token => ACCOUNT['access_token']).should == true
     end
 
     it "authorizes using auth token (backwards-compatible)" do
-      @account.authorize(ACCOUNT['auth_token']).should == true
+      @account.authorize(ACCOUNT['access_token']).should == true
     end
   end
 

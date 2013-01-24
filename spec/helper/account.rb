@@ -5,14 +5,12 @@ require 'box/api'
 
 ACCOUNT = YAML.load_file(File.dirname(__FILE__) + '/account.yml')
 
-def get_api
-  Box::Api.new(ACCOUNT['api_key'])
+def get_api( access_token = nil )
+  Box::Api.new( access_token || ACCOUNT['access_token'])
 end
 
-def get_account(auth = true)
-  Box::Account.new(get_api).tap do |account|
-    account.authorize(:auth_token => ACCOUNT['auth_token']) if auth
-  end
+def get_account(access_token = nil)
+  Box::Account.new( get_api(access_token) )
 end
 
 def get_root

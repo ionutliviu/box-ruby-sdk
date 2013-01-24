@@ -11,7 +11,6 @@ describe Box::Folder do
   before(:each) do
     @test_root = @root.create_folder('rspec')
     @test_temp = @test_root.create_folder('temp')
-
     @dummy = @test_root.create_folder('dummy')
   end
 
