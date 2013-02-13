@@ -120,7 +120,7 @@ module Box
           @default_headers = { 'Authorization' => "Bearer #{ @access_token }" }
         elsif details[:auth_token]
           @auth_token = details[:auth_token]
-          @api_key = details[:api_key]
+          @api_key = details[:api_key] unless details[:api_key].nil?
 
           @default_headers = { 'Authorization' => "BoxAuth api_key=#{ @api_key }&auth_token=#{ @auth_token }" }
         else

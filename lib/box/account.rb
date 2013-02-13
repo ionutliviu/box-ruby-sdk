@@ -174,7 +174,11 @@ module Box
     end
 
     def set_access_token(details = nil)
-      cache_token(details)
+      if details
+        cache_token(details)
+      else
+        cache_info(nil)
+      end
     end
 
     protected
