@@ -26,15 +26,25 @@ module Box
     #       this class will no longer work. However, the option to change
     #       the defaults still remains.
     #
-    # @param [String, Api] access_token The access token for your user. 
+    # @param [String, Hash] details The access token for your user.
     #
     # @param [String] url the url of the Box api.
     #
-    def initialize(access_token, url = 'https://api.box.com')
-      @access_token = access_token
+    def initialize(details, url = 'https://api.box.com')
+      @default_params = {}
 
-      @default_params = {} 
-      @default_headers = { 'Authorization' => "Bearer #{access_token}" }
+      if details.is_a?(Hash)
+        @auth_token = details[:auth_token]
+        @api_key = details[:api_key]
+
+        @default_headers = { 'Authorization' => "BoxAuth api_key=#{ @api_key }&auth_token=#{ @auth_token }" }
+      elsif details
+        @access_token = details
+
+        @default_headers = { 'Authorization' => "Bearer #{ @access_token }" }
+      else
+        @default_headers = {}
+      end
 
       @base_url = "#{ url }/2.0" # set the base of the request url
     end
@@ -65,44 +75,62 @@ module Box
       params[:body] = body if body
 
       response = self.class.send(method.to_sym, url, params)
+
       unless response.success?
+        message = "response: #{ response.to_s }, url: #{ url }, params_query: #{ params[:query].inspect }, params_body: #{ params[:body].inspect }"
+
         case response
-        when Net::HTTPUnauthorized
-          raise Box::Net::NotAuthorized.new( response )
-        when Net::HTTPForbidden
-          raise Box::Net::Restricted.new( response )
-        when Net::HTTPConflict
-          raise Box::Net::NameTaken.new( response )
-          
-        when Net::HTTPUnknownResponse
-          case response.code
-          when 429 # rate limited
-            raise Box::Net::RateLimited.new( response )
-          when 507 # insufficient_storeage
-            raise Box::Net::AccountExceeded.new( response )
+          when Net::HTTPUnauthorized
+            fail Box::Net::NotAuthorized.new(message)
+          when Net::HTTPForbidden
+            fail Box::Net::Restricted.new(message)
+          when Net::HTTPConflict
+            fail Box::Net::NameTaken.new(message)
+
+          when Net::HTTPUnknownResponse
+            case response.code
+            when 429 # rate limited
+              fail Box::Net::RateLimited.new(message)
+            when 507 # insufficient_storeage
+              fail Box::Net::AccountExceeded.new(message)
+            else
+              fail Box::Net::UnknownResponse.new(message)
+            end
+          when Net::HTTPServerError
+            fail Box::Net::Unknown.new(message)
+          when Net::HTTPClientError
+            fail Box::Net::InvalidInput.new(message)
           else
-            raise Box::Net::UnknownResponse.new( response )
-          end
-        when Net::HTTPServerError
-          raise Box::Net::Unknown.new( response )
-        when Net::HTTPClientError
-          raise Box::Net::InvalidInput.new( response )
+            fail Box::Net::Unknown.new(message)
         end
       end
+
       response
     end
 
     # Add the access token to every request.
     #
-    # @param [String] access_token The auth token to add to every request.
-    def set_access_token(access_token)
-      @access_token = access_token
+    # @param [String, Hash] details The auth token to add to every request.
+    def set_access_token(details)
 
-      if access_token
-        @default_params[:access_token] = access_token
-        @default_headers['Authorization'] = "Bearer #{access_token}"
+      if details.is_a?(Hash)
+        if details[:access_token]
+          @access_token = details[:access_token]
+
+          @default_headers = { 'Authorization' => "Bearer #{ @access_token }" }
+        elsif details[:auth_token]
+          @auth_token = details[:auth_token]
+          @api_key = details[:api_key]
+
+          @default_headers = { 'Authorization' => "BoxAuth api_key=#{ @api_key }&auth_token=#{ @auth_token }" }
+        else
+          @default_headers.delete('Authorization')
+        end
+      elsif details
+        @access_token = details
+
+        @default_headers = { 'Authorization' => "Bearer #{ @access_token }" }
       else
-        @default_params.delete(:access_token)
         @default_headers.delete('Authorization')
       end
     end
@@ -183,8 +211,8 @@ module Box
     end
 
     # VALID
-    def get_folder_info(folder_id)
-      query(:get, :folders, folder_id)
+    def get_folder_info(folder_id, params = {})
+      query(:get, :folders, folder_id, query: params)
     end
 
     # VALID
@@ -214,8 +242,15 @@ module Box
     end
 
     # VALID
-    def get_file_comments( file_id )
+    def get_file_comments(file_id)
       query(:get, :files, file_id, :comments )
+    end
+
+    # Get the collaborations for a folder.
+    #
+    # @param [String] folder_id The id of the folder for which to get the collaborations.
+    def get_folder_collaborations(folder_id)
+      query(:get, :folders, folder_id, :collaborations)
     end
 
 =begin

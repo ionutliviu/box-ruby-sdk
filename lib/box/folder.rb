@@ -174,12 +174,79 @@ module Box
       update_info( response.parsed_response )
     end
 
+    # Get the name with the current date appended to it
+    def name_with_current_date
+      super(true)
+    end
+
+    # Get folder collaborations
+    def get_collaborations
+      response = @api.get_folder_collaborations(id)
+      response.parsed_response
+    end
+
     protected
 
     # (see Item#get_info)
-    def get_info
-      response = @api.get_folder_info(id)
+    def get_info(params = nil)
+      if params.nil?
+        max = 1000
+        limit = max
+        offset = 0
+
+        response = @api.get_folder_info(id, limit: limit, offset: offset)
+
+        total_count = response['item_collection']['total_count']
+
+        if limit < total_count
+          items = response['item_collection']['entries']
+
+          while limit < total_count do
+            offset = limit
+            limit += max
+
+            response = @api.get_folder_info(id, limit: limit, offset: offset)
+            items += response['item_collection']['entries']
+          end
+
+          response['item_collection']['entries'] = items
+        end
+      else
+        response = @api.get_folder_info(id, params)
+      end
+
       response.parsed_response
+    end
+
+    # Get the info for this item. Uses a cached copy if avaliable,
+    # or else it is fetched from the api.
+    #
+    # @param [Boolean] refresh Does not use the cached copy if true.
+    # @param [Hash] params contain the limit and the offset for the list of items
+    # @return [Item] self
+    def info(refresh = false, params = nil)
+      return self if @cached_info and not refresh
+
+      @cached_info = true
+      update_info(get_info(params))
+
+      self
+    end
+
+    # Create a new folder using this folder as the parent.
+    # If there is already a folder with the same name, the new folder will have the current date appended to the name.
+    #
+    # @param [String] name The name of the new folder.
+    # @return [Folder] The new folder.
+    def create_folder_with_unique_name(name)
+      create_folder(name)
+    rescue Box::Net::NameTaken => e
+      # if the folder already exists, the date will be added to the name (to succeed in creating the backup folder)
+      create_folder(self.name_with_current_date)
+
+      if block_given?
+        yield
+      end
     end
 
     # (see #find)

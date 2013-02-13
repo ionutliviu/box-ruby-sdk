@@ -41,6 +41,9 @@ module Box
     end
 
     def update(params)
+      params[:name] ||= name
+      params[:parent] = { id: params[:parent].id } if params[:parent]
+
       response = @api.update_file_info(id, params)
       Box::File.new(@api, response.parsed_response)
     end
@@ -105,6 +108,11 @@ module Box
     def unshare( params = {} )
       response = @api.share_file( id, nil )
       update_info( response.parsed_response )
+    end
+
+    # Get the name with the current date appended to it
+    def name_with_current_date
+      super(false)
     end
 
     protected

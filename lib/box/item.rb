@@ -14,7 +14,6 @@ module Box
     # Create a new item representing either a file or folder.
     #
     # @param [Api] api The {Api} instance used to generate requests.
-    # @param [Folder] parent The {Folder} parent of this item.
     # @param [Hash] info The hash of initial info for this item.
     def initialize(api, info = Hash.new)
       @api = api
@@ -80,6 +79,27 @@ module Box
       self.class == other.class and self.id == other.id
     end
 
+    # Change the parent folder (= move)
+    #
+    # @param [String] parent_id The id of the parent where the item will be moved to.
+    # @param [Boolean] force Use this parameter to force the change in case the name is not unique.
+    def change_parent(parent_id, force = false)
+      parent = Item.new(@api, :id => parent_id)
+
+      update(parent: parent)
+    rescue Box::Net::NameTaken => e
+      # if the item already exists, the date will be added to the name (to succeed in moving the file)
+      if force
+        update(name: name_with_current_date, parent: parent)
+
+        if block_given?
+          yield
+        end
+      else
+        raise e
+      end
+    end
+
     protected
 
     # Fetches this item's info from the api.
@@ -122,6 +142,19 @@ module Box
       end
 
       @data.merge!(ninfo) # merge in the updated info
+    end
+
+    # Get the name with the current date appended to it
+    def name_with_current_date(is_folder = false)
+      if is_folder
+        ext = ''
+        base_name = name
+      else
+        ext = File.extname(name)
+        base_name = File.basename(name, ext)
+      end
+
+      "#{ base_name.gsub(/( )*\((\d){4}-(\d){2}-(\d){2} (\d){2}-(\d){2} UTC\)( )*$/, '') } (#{ Time.now.utc.strftime('%Y-%m-%d %H-%M') } UTC)#{ ext }"
     end
   end
 end

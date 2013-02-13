@@ -11,12 +11,12 @@ module Box
     # You can then {#register} a new account or {#authorize} an
     # existing account.
     #
-    # @param [String, Api] api the api key to use for the Box api.
+    # @param [String, Api, Hash] api the api key to use for the Box api.
     def initialize(api)
       @api = case
-        when api.class == Box::Api; api # use the api object as passed in
-        else; Box::Api.new(api) # allows user to pass in a string
-      end
+               when api.class == Box::Api; api # use the api object as passed in
+               else; Box::Api.new(api) # allows user to pass in a string
+             end
     end
 
     # Authorize the account using the given auth token/ticket, or request
@@ -66,14 +66,11 @@ module Box
     def authorize(details = nil)
       # for backwards compatibility
       if details.is_a?(Hash)
-        auth_token = details[:auth_token]
-      else
-        auth_token = details
-      end
-
-      # use a saved auth token if it is given
-      if auth_token
-        return true if authorize_token(auth_token)
+        if details[:access_code] || details[:auth_token]
+          return true if authorize_token(details)
+        end
+      elsif details
+        return true if authorize_token(details)
       end
 
       # return our authorized status
@@ -169,6 +166,17 @@ module Box
       @info.key?(sym.to_s) or super
     end
 
+    # Gets an item object by id
+    #
+    # @param [String] id The id of the item to fetch.
+    def item(id)
+      Box::Item.new(@api, :id => id)
+    end
+
+    def set_access_token(details = nil)
+      cache_token(details)
+    end
+
     protected
 
     # @return [Api] The api currently in use.
@@ -178,21 +186,21 @@ module Box
     # will only succeed if the auth token has been used before, and
     # be done to make login easier.
     #
-    # @param [String] auth_token The auth token to attempt to use
+    # @param [String] details The auth token to attempt to use
     # @return [Boolean] If the attempt was successful.
     #
-    def authorize_token(access_token)
-      cache_token(access_token)
+    def authorize_token(details)
+      cache_token(details)
       info(true) # force a refresh
 
       authorized?
     end
 
     # Use and cache the given auth token.
-    # @param [String] auth_token The auth token to cache.
+    # @param [String] details The auth token to cache.
     # @return [String] The auth token.
-    def cache_token(access_token)
-      @api.set_access_token(access_token)
+    def cache_token(details)
+      @api.set_access_token(details)
     end
 
     # Cache the account info.
